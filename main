@@ -1,0 +1,58 @@
+import cv2
+import numpy as np
+
+img1 = cv2.imread("a.jpg", cv2.IMREAD_GRAYSCALE)
+img2 = cv2.imread("b.jpg", cv2.IMREAD_GRAYSCALE)
+img3 = cv2.imread("c.jpg", cv2.IMREAD_GRAYSCALE)
+images = [img1, img2, img3]
+
+seeds = [(150, 200), (150, 200), (100, 200)]
+rg_thresh = [20, 25, 20]
+
+
+def gauss_thresh(gray, block=31, C=10):
+    pad = block // 2
+    img = gray.astype(np.float64)
+    
+    sigma = 0.3 * (pad - 1) + 0.8
+    ax = np.arange(-pad, pad + 1)
+    xx, yy = np.meshgrid(ax, ax)
+    kernel = np.exp(-(xx**2 + yy**2) / (2 * sigma**2))
+    kernel = kernel / kernel.sum()  # normalizējam, lai summa = 1
+
+    local_mean = cv2.filter2D(img, -1, kernel)
+    
+    result = np.where(img > local_mean - C, 255, 0).astype(np.uint8)
+    return result
+
+
+def region_growing(gray, seed, threshold=15):
+    h, w = gray.shape
+    visited = np.zeros((h, w), dtype=bool)
+    mask = np.zeros((h, w), dtype=np.uint8)
+
+    seed_val = int(gray[seed[0], seed[1]])
+    stack = [(seed[0], seed[1], seed_val)]
+
+    while stack:
+        y, x, parent_val = stack.pop()
+        if visited[y, x]:
+            continue
+        visited[y, x] = True
+
+        if abs(int(gray[y, x]) - parent_val) <= threshold:
+            mask[y, x] = 255
+            cur_val = int(gray[y, x])
+            for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx]:
+                    stack.append((ny, nx, cur_val))
+    return mask
+
+for i in range(3):
+    letter = chr(ord("a") + i)
+    cv2.imwrite(f"{letter}_gauss.jpg", gauss_thresh(images[i]))
+    cv2.imwrite(
+        f"{letter}_region.jpg", region_growing(images[i], seeds[i], rg_thresh[i])
+    )
+    print(f"{letter}.jpg -> {letter}_gauss.jpg, {letter}_region.jpg")
